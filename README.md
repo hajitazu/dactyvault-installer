@@ -41,4 +41,4 @@ To trigger the installation process, log into your target Pterodactyl Panel VPS 
 Execute the following one-line command:
 
 ```bash
-bash <(curl -s [https://raw.githubusercontent.com/hajitazu/dactyvault-installer/main/install.sh](https://raw.githubusercontent.com/hajitazu/dactyvault-installer/main/install.sh))
+bash <(curl -fsSL https://raw.githubusercontent.com/hajitazu/dactyvault-installer/main/install.sh)
