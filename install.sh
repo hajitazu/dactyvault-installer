@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # =========================================================================
-# DactyVault One-Click Automatic Installer Script (Official GitHub Release)
+# DactyVault One-Click Installer - Full Directory Structure Protection
 # =========================================================================
 
 # 1. Pastikan dijalankan sebagai root
@@ -14,15 +14,38 @@ echo -e "\e[34m==================================================\e[0m"
 echo -e "\e[32m       STARTING DACTYVAULT AUTO INSTALLER        \e[0m"
 echo -e "\e[34m==================================================\e[0m"
 
-# 2. Buat direktori struktur yang dibutuhkan
-echo -e "\e[33m[1/5] Membuat struktur direktori...\e[0m"
+# 2. Masuk ke direktori Pterodactyl dan Aktifkan Maintenance Mode
+echo -e "\e[33m[1/8] Mengaktifkan Maintenance Mode pada Panel...\e[0m"
+cd /var/www/pterodactyl || { echo -e "\e[31m[ERROR] Folder /var/www/pterodactyl tidak ditemukan!\e[0m"; exit 1; }
+
+# Menyalakan maintenance mode agar user tidak bisa akses panel sementara waktu
+php artisan down --secret="dactyvaultinstall"
+
+# 3. Buat SEMUA struktur direktori secara presisi (Pencegahan Eror No Such File)
+echo -e "\e[33m[2/8] Membuat dan mengamankan seluruh struktur direktori sistem...\e[0m"
+
+# Membuat folder internal storage dactyvault & rclone
 mkdir -p /var/www/pterodactyl/storage/dactyvault
 mkdir -p /var/www/pterodactyl/storage/rclone
+
+# Membuat folder backend controller (jika belum ada)
+mkdir -p /var/www/pterodactyl/app/Http/Controllers/Admin
+
+# Membuat folder frontend view UI dactyvault
+mkdir -p /var/www/pterodactyl/resources/views/admin/dactyvault
+
+# Membuat folder sistem cron Linux (jika belum ada)
+mkdir -p /etc/cron.d
+
+# Mengatur kepemilikan awal agar bisa ditulis oleh root maupun www-data
 chown -R www-data:www-data /var/www/pterodactyl/storage/dactyvault
 chown -R www-data:www-data /var/www/pterodactyl/storage/rclone
+chown -R www-data:www-data /var/www/pterodactyl/app/Http/Controllers/Admin
+chown -R www-data:www-data /var/www/pterodactyl/resources/views/admin/dactyvault
 
-# 3. Inject Core Engine Script (Bash Script + Auto Purge 7 Days)
-echo -e "\e[33m[2/5] Memasang Core Backup Engine (Bash)...\e[0m"
+
+# 4. Inject Core Engine Script (Bash Script + Auto Purge 7 Days)
+echo -e "\e[33m[3/8] Memasang Core Backup Engine (Bash)...\e[0m"
 cat << 'EOF' > /var/www/pterodactyl/storage/dactyvault_backup.sh
 #!/bin/bash
 RCLONE_CONFIG="/root/.config/rclone/rclone.conf"
@@ -81,13 +104,13 @@ done
 rm -rf $TEMP_BACKUP_DIR
 EOF
 
-# Terapkan Permission Aman untuk Core Engine
+# Set Permission Core Engine Backup (Harus Root untuk membaca /var/lib/pterodactyl/volumes)
 chmod +x /var/www/pterodactyl/storage/dactyvault_backup.sh
 chown root:root /var/www/pterodactyl/storage/dactyvault_backup.sh
 
 
-# 4. Inject Backend Controller (PHP Laravel)
-echo -e "\e[33m[3/5] Menyuntikkan Backend Controller (PHP)...\e[0m"
+# 5. Inject Backend Controller (PHP Laravel)
+echo -e "\e[33m[4/8] Menyuntikkan Backend Controller (PHP)...\e[0m"
 cat << 'EOF' > /var/www/pterodactyl/app/Http/Controllers/Admin/DactyVaultController.php
 <?php
 namespace Pterodactyl\Http\Controllers\Admin;
@@ -202,13 +225,13 @@ class DactyVaultController extends Controller {
 }
 EOF
 
-# Terapkan Permission File Controller agar bisa dieksekusi Nginx (www-data)
+# Set Permission File Controller agar bisa diakses Web Server Nginx
 chmod 644 /var/www/pterodactyl/app/Http/Controllers/Admin/DactyVaultController.php
 chown www-data:www-data /var/www/pterodactyl/app/Http/Controllers/Admin/DactyVaultController.php
 
 
-# 5. Inject Frontend Blade UI View
-echo -e "\e[33m[4/5] Menyuntikkan Frontend Tampilan (Blade UI)...\e[0m"
+# 6. Inject Frontend Blade UI View
+echo -e "\e[33m[5/8] Menyuntikkan Frontend Tampilan (Blade UI)...\e[0m"
 cat << 'EOF' > /var/www/pterodactyl/resources/views/admin/dactyvault/index.blade.php
 @extends('layouts.admin')
 @section('title') DactyVault Settings @endsection
@@ -364,21 +387,23 @@ cat << 'EOF' > /var/www/pterodactyl/resources/views/admin/dactyvault/index.blade
 @endsection
 EOF
 
-# Terapkan Permission File View agar bisa dibaca Web Server Nginx (www-data)
+# Set Permission File View UI
 chmod 644 /var/www/pterodactyl/resources/views/admin/dactyvault/index.blade.php
 chown www-data:www-data /var/www/pterodactyl/resources/views/admin/dactyvault/index.blade.php
 
 
-# 6. Pasang Engine Sinkronisasi Cronjob Jembatan di VPS Linux
-echo -e "\e[33m[5/5] Mengonfigurasi Otomasi Jembatan Sistem Cronjob Linux Engine...\e[0m"
+# 7. Pasang Engine Sinkronisasi Cronjob Jembatan di VPS Linux
+echo -e "\e[33m[6/8] Mengonfigurasi Otomasi Jembatan Sistem Cronjob Linux Engine...\e[0m"
 echo "* * * * * root cp /var/www/pterodactyl/storage/dactyvault/cron.txt /etc/cron.d/dactyvault && chmod 644 /etc/cron.d/dactyvault" > /etc/cron.d/dactyvault_sync
 chmod 644 /etc/cron.d/dactyvault_sync
 
-# 7. Finishing (Clear Cache Laravel agar langsung update)
-echo -e "\e[33m[OPTIMASI] Membersihkan cache template views & routes Laravel Pterodactyl...\e[0m"
-cd /var/www/pterodactyl
+# 8. Pembersihan Cache dan Matikan Maintenance Mode (Up)
+echo -e "\e[33m[7/8] Membersihkan cache views & routes Laravel Pterodactyl...\e[0m"
 php artisan view:clear
 php artisan route:clear
+
+echo -e "\e[33m[8/8] Mengaktifkan Kembali Akses Panel (PHP Artisan Up)...\e[0m"
+php artisan up
 
 echo -e "\e[34m==================================================\e[0m"
 echo -e "\e[32m  DACTYVAULT SYSTEM INSTALLED SUCCESSFULLY 100%!  \e[0m"
