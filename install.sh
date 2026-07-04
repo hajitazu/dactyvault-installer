@@ -1,10 +1,9 @@
 #!/bin/bash
 
 # =========================================================================
-# DactyVault One-Click Installer - Full Directory Structure Protection
+# DactyVault One-Click Installer - Production Stable Fix
 # =========================================================================
 
-# 1. Pastikan dijalankan sebagai root
 if [ "$EUID" -ne 0 ]; then
     echo -e "\e[31m[ERROR] Silakan jalankan skrip ini sebagai root (sudo bash)!\e[0m"
     exit 1
@@ -14,38 +13,27 @@ echo -e "\e[34m==================================================\e[0m"
 echo -e "\e[32m       STARTING DACTYVAULT AUTO INSTALLER        \e[0m"
 echo -e "\e[34m==================================================\e[0m"
 
-# 2. Masuk ke direktori Pterodactyl dan Aktifkan Maintenance Mode
-echo -e "\e[33m[1/8] Mengaktifkan Maintenance Mode pada Panel...\e[0m"
+# 1. Masuk ke direktori Pterodactyl dan Aktifkan Maintenance Mode
+echo -e "\e[33m[1/7] Mengaktifkan Maintenance Mode...\e[0m"
 cd /var/www/pterodactyl || { echo -e "\e[31m[ERROR] Folder /var/www/pterodactyl tidak ditemukan!\e[0m"; exit 1; }
 
-# Menyalakan maintenance mode agar user tidak bisa akses panel sementara waktu
 php artisan down --secret="dactyvaultinstall"
 
-# 3. Buat SEMUA struktur direktori secara presisi (Pencegahan Eror No Such File)
-echo -e "\e[33m[2/8] Membuat dan mengamankan seluruh struktur direktori sistem...\e[0m"
-
-# Membuat folder internal storage dactyvault & rclone
+# 2. Paksa pembuatan seluruh folder induk dari akar
+echo -e "\e[33m[2/7] Membuka paksa permission struktur folder...\e[0m"
 mkdir -p /var/www/pterodactyl/storage/dactyvault
 mkdir -p /var/www/pterodactyl/storage/rclone
-
-# Membuat folder backend controller (jika belum ada)
 mkdir -p /var/www/pterodactyl/app/Http/Controllers/Admin
-
-# Membuat folder frontend view UI dactyvault
-mkdir -p /var/www/pterodactyl/resources/views/admin/dactyvault
-
-# Membuat folder sistem cron Linux (jika belum ada)
+mkdir -p /var/www/pterodactyl/resources/views/admin
 mkdir -p /etc/cron.d
 
-# Mengatur kepemilikan awal agar bisa ditulis oleh root maupun www-data
 chown -R www-data:www-data /var/www/pterodactyl/storage/dactyvault
 chown -R www-data:www-data /var/www/pterodactyl/storage/rclone
 chown -R www-data:www-data /var/www/pterodactyl/app/Http/Controllers/Admin
-chown -R www-data:www-data /var/www/pterodactyl/resources/views/admin/dactyvault
+chown -R www-data:www-data /var/www/pterodactyl/resources/views/admin
 
-
-# 4. Inject Core Engine Script (Bash Script + Auto Purge 7 Days)
-echo -e "\e[33m[3/8] Memasang Core Backup Engine (Bash)...\e[0m"
+# 3. Tulis Core Engine Script
+echo -e "\e[33m[3/7] Menulis File: dactyvault_backup.sh ...\e[0m"
 cat << 'EOF' > /var/www/pterodactyl/storage/dactyvault_backup.sh
 #!/bin/bash
 RCLONE_CONFIG="/root/.config/rclone/rclone.conf"
@@ -104,13 +92,11 @@ done
 rm -rf $TEMP_BACKUP_DIR
 EOF
 
-# Set Permission Core Engine Backup (Harus Root untuk membaca /var/lib/pterodactyl/volumes)
 chmod +x /var/www/pterodactyl/storage/dactyvault_backup.sh
 chown root:root /var/www/pterodactyl/storage/dactyvault_backup.sh
 
-
-# 5. Inject Backend Controller (PHP Laravel)
-echo -e "\e[33m[4/8] Menyuntikkan Backend Controller (PHP)...\e[0m"
+# 4. Tulis Backend Controller PHP
+echo -e "\e[33m[4/7] Menulis File: DactyVaultController.php ...\e[0m"
 cat << 'EOF' > /var/www/pterodactyl/app/Http/Controllers/Admin/DactyVaultController.php
 <?php
 namespace Pterodactyl\Http\Controllers\Admin;
@@ -156,7 +142,7 @@ class DactyVaultController extends Controller {
                 }
             }
         }
-        return view('admin.dactyvault.index', compact('remotes', 'servers', 'cronjobs'));
+        return view('admin.dactyvault', compact('remotes', 'servers', 'cronjobs'));
     }
 
     public function getFolders(Request $request): JsonResponse {
@@ -225,14 +211,12 @@ class DactyVaultController extends Controller {
 }
 EOF
 
-# Set Permission File Controller agar bisa diakses Web Server Nginx
 chmod 644 /var/www/pterodactyl/app/Http/Controllers/Admin/DactyVaultController.php
 chown www-data:www-data /var/www/pterodactyl/app/Http/Controllers/Admin/DactyVaultController.php
 
-
-# 6. Inject Frontend Blade UI View
-echo -e "\e[33m[5/8] Menyuntikkan Frontend Tampilan (Blade UI)...\e[0m"
-cat << 'EOF' > /var/www/pterodactyl/resources/views/admin/dactyvault/index.blade.php
+# 5. Tulis Tampilan Frontend (Disimpan langsung di folder admin agar aman dibaca blade)
+echo -e "\e[33m[5/7] Menulis File: dactyvault.blade.php ...\e[0m"
+cat << 'EOF' > /var/www/pterodactyl/resources/views/admin/dactyvault.blade.php
 @extends('layouts.admin')
 @section('title') DactyVault Settings @endsection
 @section('header-scripts')
@@ -387,22 +371,18 @@ cat << 'EOF' > /var/www/pterodactyl/resources/views/admin/dactyvault/index.blade
 @endsection
 EOF
 
-# Set Permission File View UI
-chmod 644 /var/www/pterodactyl/resources/views/admin/dactyvault/index.blade.php
-chown www-data:www-data /var/www/pterodactyl/resources/views/admin/dactyvault/index.blade.php
+chmod 644 /var/www/pterodactyl/resources/views/admin/dactyvault.blade.php
+chown www-data:www-data /var/www/pterodactyl/resources/views/admin/dactyvault.blade.php
 
-
-# 7. Pasang Engine Sinkronisasi Cronjob Jembatan di VPS Linux
-echo -e "\e[33m[6/8] Mengonfigurasi Otomasi Jembatan Sistem Cronjob Linux Engine...\e[0m"
+# 6. Pasang Engine Sync Cronjob Linux
+echo -e "\e[33m[6/7] Sinkronisasi Cronjob Engine...\e[0m"
 echo "* * * * * root cp /var/www/pterodactyl/storage/dactyvault/cron.txt /etc/cron.d/dactyvault && chmod 644 /etc/cron.d/dactyvault" > /etc/cron.d/dactyvault_sync
 chmod 644 /etc/cron.d/dactyvault_sync
 
-# 8. Pembersihan Cache dan Matikan Maintenance Mode (Up)
-echo -e "\e[33m[7/8] Membersihkan cache views & routes Laravel Pterodactyl...\e[0m"
+# 7. Clear Cache dan Nyalakan Kembali Panel
+echo -e "\e[33m[7/7] Finishing optimasi & booting up panel...\e[0m"
 php artisan view:clear
 php artisan route:clear
-
-echo -e "\e[33m[8/8] Mengaktifkan Kembali Akses Panel (PHP Artisan Up)...\e[0m"
 php artisan up
 
 echo -e "\e[34m==================================================\e[0m"
